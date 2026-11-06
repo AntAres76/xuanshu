@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="八字、紫微斗数与时家奇门遁甲排盘，每一项结果都可以点开看原理和古籍出处：四柱十神、藏干纳音、神煞、五行旺衰、格局喜用、大运流年流月流日、奇门转盘格局、黄历、合婚、四柱反查。">
+<title>玄枢 · 八字紫微奇门排盘</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="玄枢">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15120f" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="seal">玄</span>玄枢排盘</div>
+    <nav class="tabs" role="tablist" aria-label="功能">
+      <button class="tab" role="tab" data-tab="bazi" aria-selected="true">八字排盘</button>
+      <button class="tab" role="tab" data-tab="ziwei" aria-selected="false">紫微斗数</button>
+      <button class="tab" role="tab" data-tab="qimen" aria-selected="false">奇门遁甲</button>
+      <button class="tab" role="tab" data-tab="almanac" aria-selected="false">黄历择日</button>
+      <button class="tab" role="tab" data-tab="hehun" aria-selected="false">八字合婚</button>
+      <button class="tab" role="tab" data-tab="reverse" aria-selected="false">四柱反查</button>
+      <button class="tab" role="tab" data-tab="records" aria-selected="false">命例档案</button>
+    </nav>
+    <button class="icon-btn" id="themeBtn" title="切换深浅色" aria-label="切换深浅色"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+</header>
+
+<div class="install-hint no-print" id="installHint" hidden>
+  <div>
+    <span>在 Safari 里点“分享 → 添加到主屏幕”，就能像 App 一样全屏、离线使用。</span>
+    <button type="button" class="btn sm" data-xp="app|安装">怎么做</button>
+    <button type="button" class="btn sm" id="installHide">不再提示</button>
+  </div>
+</div>
+<div class="pbar no-print">
+  <div class="pbar-inner">
+    <label for="curProfile">当前命例</label>
+    <select id="curProfile"></select>
+    <span class="hint pbar-hint">排过的盘自动存在这里，切换后八字、紫微、奇门年命、择日生肖一起同步</span>
+  </div>
+</div>
+
+<main>
+  <!-- ================= 八字 ================= -->
+  <section id="tab-bazi">
+    <form class="card" id="baziForm" autocomplete="off">
+      <h2>出生信息</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label for="bz-name">姓名（可选）</label>
+          <input type="text" id="bz-name" placeholder="例如：张三" maxlength="20">
+        </div>
+        <div class="field">
+          <span class="lbl">性别</span>
+          <div class="seg" role="radiogroup" aria-label="性别">
+            <label><input type="radio" name="bz-gender" value="1" checked><span>男（乾造）</span></label>
+            <label><input type="radio" name="bz-gender" value="0"><span>女（坤造）</span></label>
+          </div>
+        </div>
+        <div class="field wide">
+          <span class="lbl">出生时间</span>
+          <div data-dtp="bz"></div>
+        </div>
+        <div class="field wide" data-loc="bz"></div>
+      </div>
+      <details class="more">
+        <summary>高级选项</summary>
+        <div class="form-grid">
+          <div class="field">
+            <label for="bz-sect">子时换日</label>
+            <select id="bz-sect">
+              <option value="1">23:00 换日（晚子时算次日）</option>
+              <option value="2">0:00 换日（晚子时日柱算当天）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="bz-yunsect">起运算法</label>
+            <select id="bz-yunsect">
+              <option value="1">按天数与时辰（3天=1年，1天=4月，1时辰=10天）</option>
+              <option value="2">按分钟精算（4320分=1年）</option>
+            </select>
+          </div>
+        </div>
+      </details>
+      <div class="actions">
+        <button class="btn primary" type="submit">开始排盘</button>
+        <button class="btn" type="button" id="bz-now">当前时间</button>
+        <button class="btn" type="button" id="bz-save">保存到档案</button>
+        <button class="btn" type="button" id="bz-share">复制分享链接</button>
+        <button class="btn" type="button" id="bz-print">打印 / 导出 PDF</button>
+      </div>
+    </form>
+    <div id="baziResult"></div>
+  </section>
+
+  <!-- ================= 紫微 ================= -->
+  <section id="tab-ziwei" hidden>
+    <form class="card" id="ziweiForm" autocomplete="off">
+      <h2>出生信息 <span class="sub">三合派通行安星法，底本《紫微斗数全书》</span></h2>
+      <div class="form-grid">
+        <div class="field">
+          <label for="zw-name">姓名（可选）</label>
+          <input type="text" id="zw-name" placeholder="例如：张三" maxlength="20">
+        </div>
+        <div class="field">
+          <span class="lbl">性别</span>
+          <div class="seg" role="radiogroup" aria-label="性别">
+            <label><input type="radio" name="zw-gender" value="1" checked><span>男</span></label>
+            <label><input type="radio" name="zw-gender" value="0"><span>女</span></label>
+          </div>
+        </div>
+        <div class="field wide">
+          <span class="lbl">出生时间</span>
+          <div data-dtp="zw"></div>
+        </div>
+        <div class="field wide" data-loc="zw"></div>
+      </div>
+      <details class="more">
+        <summary>流派选项</summary>
+        <div class="form-grid">
+          <div class="field">
+            <label for="zw-leap">闰月处理</label>
+            <select id="zw-leap">
+              <option value="mid">前半月算本月，后半月算下月（通行）</option>
+              <option value="next">全部算下月（《全书》）</option>
+              <option value="this">全部算本月</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="zw-zi">晚子时（23–24 点）</label>
+            <select id="zw-zi">
+              <option value="next">日期算次日</option>
+              <option value="same">日期算当日</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="zw-dx">大限起宫</label>
+            <select id="zw-dx">
+              <option value="ming">从命宫起（通行）</option>
+              <option value="book">从命宫前后一宫起（《全书》）</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint"><button type="button" class="xpw" data-xp="zw|校准">这些选项有什么区别</button></p>
+      </details>
+      <div class="actions">
+        <button class="btn primary" type="submit">开始排盘</button>
+        <button class="btn" type="button" id="zw-now">当前时间</button>
+        <button class="btn" type="button" id="zw-save">保存到档案</button>
+      </div>
+    </form>
+    <div id="ziweiResult"></div>
+  </section>
+
+  <!-- ================= 奇门 ================= -->
+  <section id="tab-qimen" hidden>
+    <form class="card" id="qimenForm" autocomplete="off">
+      <h2>起局时间 <span class="sub">时家奇门 · 转盘</span></h2>
+      <div class="form-grid">
+        <div class="field wide">
+          <span class="lbl">时间（公历）</span>
+          <div data-dtp="qm"></div>
+        </div>
+        <div class="field">
+          <label for="qm-method">定局方法</label>
+          <select id="qm-method">
+            <option value="chaibu">拆补法（按节气交接时刻 + 日干支符头）</option>
+            <option value="zhirun">置闰法（超神接气，芒种/大雪置闰）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="qm-ming">年命（可选，标注求测人年干落宫）</label>
+          <select id="qm-ming"><option value="">不标注</option></select>
+        </div>
+        <div class="field">
+          <label for="qm-ys">用神速查</label>
+          <select id="qm-ys"><option value="">— 选择所测之事 —</option></select>
+        </div>
+        <div class="field wide" data-loc="qm"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit">起局</button>
+        <button class="btn" type="button" id="qm-now">当前时间</button>
+        <button class="btn" type="button" id="qm-prev">◀ 前一时辰</button>
+        <button class="btn" type="button" id="qm-next">后一时辰 ▶</button>
+        <button class="btn" type="button" id="qm-share">复制分享链接</button>
+      </div>
+    </form>
+    <div id="qimenResult"></div>
+  </section>
+
+  <!-- ================= 黄历 ================= -->
+  <section id="tab-almanac" hidden>
+    <div class="grid2" style="grid-template-columns: minmax(0,1fr) minmax(0,1.1fr); align-items: start;">
+      <div class="card" id="calCard"></div>
+      <div class="card" id="almanacDetail"></div>
+    </div>
+    <div class="card" id="almanacTimes" style="margin-top:14px"></div>
+    <div class="card">
+      <h2>择日查询 <span class="sub">在一段日期中查找宜做某事的日子</span></h2>
+      <div class="form-grid">
+        <div class="field"><label for="zr-event">事项</label><select id="zr-event"></select></div>
+        <div class="field"><label for="zr-days">范围</label>
+          <select id="zr-days"><option value="30">从所选日起 30 天</option><option value="60">60 天</option><option value="90" selected>90 天</option><option value="180">180 天</option><option value="365">一年</option></select>
+        </div>
+        <div class="field"><span class="lbl">筛选</span>
+          <label class="check"><input type="checkbox" id="zr-huangdao" checked>只看黄道日</label>
+          <label class="check"><input type="checkbox" id="zr-chong">避开冲我生肖</label>
+        </div>
+        <div class="field"><label for="zr-sx">我的生肖</label><select id="zr-sx"></select></div>
+      </div>
+      <div class="actions"><button class="btn primary" type="button" id="zr-go">查询</button></div>
+      <div id="zrResult" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ================= 合婚 ================= -->
+  <section id="tab-hehun" hidden>
+    <form class="card" id="hehunForm" autocomplete="off">
+      <h2>双方出生信息 <span class="sub">可从命例直接选，排过的人不用重输</span></h2>
+      <div class="grid2">
+        <div>
+          <h3>甲方</h3>
+          <div class="field"><label for="hh-a-pick">从命例选择</label><select id="hh-a-pick"></select></div>
+          <div class="form-grid" style="margin-top:8px;grid-template-columns:1fr auto">
+            <div class="field"><label for="hh-a-name">姓名</label><input type="text" id="hh-a-name" maxlength="20"></div>
+            <div class="field"><span class="lbl">性别</span><div class="seg" role="radiogroup" aria-label="性别">
+              <label><input type="radio" name="hh-a-gender" value="1" checked><span>男</span></label>
+              <label><input type="radio" name="hh-a-gender" value="0"><span>女</span></label>
+            </div></div>
+          </div>
+          <div class="field" style="margin-top:8px"><span class="lbl">出生时间</span><div data-dtp="hha"></div></div>
+        </div>
+        <div>
+          <h3>乙方</h3>
+          <div class="field"><label for="hh-b-pick">从命例选择</label><select id="hh-b-pick"></select></div>
+          <div class="form-grid" style="margin-top:8px;grid-template-columns:1fr auto">
+            <div class="field"><label for="hh-b-name">姓名</label><input type="text" id="hh-b-name" maxlength="20"></div>
+            <div class="field"><span class="lbl">性别</span><div class="seg" role="radiogroup" aria-label="性别">
+              <label><input type="radio" name="hh-b-gender" value="1"><span>男</span></label>
+              <label><input type="radio" name="hh-b-gender" value="0" checked><span>女</span></label>
+            </div></div>
+          </div>
+          <div class="field" style="margin-top:8px"><span class="lbl">出生时间</span><div data-dtp="hhb"></div></div>
+        </div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">合婚分析</button></div>
+    </form>
+    <div id="hehunResult"></div>
+  </section>
+
+  <!-- ================= 反查 ================= -->
+  <section id="tab-reverse" hidden>
+    <form class="card" id="reverseForm" autocomplete="off">
+      <h2>四柱反查出生时间</h2>
+      <div class="form-grid">
+        <div class="field"><label for="rv-y">年柱</label><select id="rv-y"></select></div>
+        <div class="field"><label for="rv-m">月柱</label><select id="rv-m"></select></div>
+        <div class="field"><label for="rv-d">日柱</label><select id="rv-d"></select></div>
+        <div class="field"><label for="rv-t">时柱</label><select id="rv-t"></select></div>
+        <div class="field"><label for="rv-base">起始年份</label>
+          <select id="rv-base"><option value="1801">1801 年起</option><option value="1900" selected>1900 年起</option><option value="1950">1950 年起</option></select>
+        </div>
+        <div class="field"><label for="rv-sect">子时换日</label>
+          <select id="rv-sect"><option value="1">23:00 换日</option><option value="2">0:00 换日</option></select>
+        </div>
+      </div>
+      <p class="hint">月柱须与年干相配（五虎遁），时柱须与日干相配（五鼠遁），否则无解。选择年柱、日柱后会自动给出可选的月柱、时柱。</p>
+      <div class="actions"><button class="btn primary" type="submit">反查</button></div>
+      <div id="reverseResult" style="margin-top:12px"></div>
+    </form>
+  </section>
+
+  <!-- ================= 档案 ================= -->
+  <section id="tab-records" hidden>
+    <div class="card">
+      <h2>命例档案 <span class="sub">保存在本机浏览器中</span></h2>
+      <div class="row" style="margin-bottom:12px">
+        <input type="search" id="rec-q" placeholder="搜索姓名、八字、备注">
+        <button class="btn" type="button" id="rec-export">导出 JSON</button>
+        <label class="btn" for="rec-import" style="cursor:pointer">导入 JSON</label>
+        <input type="file" id="rec-import" accept="application/json,.json" hidden>
+      </div>
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="rec-auto" checked>排盘时自动保存（相同的人只存一份，只保存在这台设备的浏览器里）</label>
+      <div id="recList" class="rec-list"></div>
+    </div>
+  </section>
+</main>
+
+<div class="footer">
+  历法计算基于 <a href="https://github.com/6tail/lunar-javascript" target="_blank" rel="noopener">lunar-javascript</a>（MIT）。全部计算在本机完成，不上传任何数据。命理内容为传统文化参考，请理性看待。
+  <br><button type="button" class="xpt" data-xp="app|安装">手机 / iPad 安装与离线说明</button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="xp-scrim" id="xpScrim" hidden></div>
+<aside class="xp-drawer" id="xpDrawer" role="dialog" aria-modal="true" aria-labelledby="xpTitle" hidden>
+  <header class="xp-head">
+    <button type="button" class="icon-btn" id="xpBack" aria-label="返回上一条">‹</button>
+    <div class="xp-ttl"><small id="xpTag"></small><h3 id="xpTitle"></h3></div>
+    <button type="button" class="icon-btn" id="xpClose" aria-label="关闭">×</button>
+  </header>
+  <div class="xp-body" id="xpBody"></div>
+</aside>
+
+<script src="js/lib/lunar.js"></script>
+<script src="js/ganzhi.js"></script>
+<script src="js/timeutil.js"></script>
+<script src="js/bazi.js"></script>
+<script src="js/qimen.js"></script>
+<script src="js/ziwei.js"></script>
+<script src="js/explain.js"></script>
+<script src="js/explain-ziwei.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
