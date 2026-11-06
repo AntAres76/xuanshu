@@ -24,6 +24,7 @@
     <nav class="tabs" role="tablist" aria-label="功能">
       <button class="tab" role="tab" data-tab="bazi" aria-selected="true">八字排盘</button>
       <button class="tab" role="tab" data-tab="ziwei" aria-selected="false">紫微斗数</button>
+      <button class="tab" role="tab" data-tab="joint" aria-selected="false">综合分析</button>
       <button class="tab" role="tab" data-tab="qimen" aria-selected="false">奇门遁甲</button>
       <button class="tab" role="tab" data-tab="almanac" aria-selected="false">黄历择日</button>
       <button class="tab" role="tab" data-tab="hehun" aria-selected="false">八字合婚</button>
@@ -45,6 +46,7 @@
   <div class="pbar-inner">
     <label for="curProfile">当前命例</label>
     <select id="curProfile"></select>
+    <button type="button" class="btn sm" id="curEdit">修改</button>
     <span class="hint pbar-hint">排过的盘自动存在这里，切换后八字、紫微、奇门年命、择日生肖一起同步</span>
   </div>
 </div>
@@ -159,6 +161,11 @@
       </div>
     </form>
     <div id="ziweiResult"></div>
+  </section>
+
+  <!-- ================= 综合 ================= -->
+  <section id="tab-joint" hidden>
+    <div id="jointResult"></div>
   </section>
 
   <!-- ================= 奇门 ================= -->
@@ -282,6 +289,35 @@
 
   <!-- ================= 档案 ================= -->
   <section id="tab-records" hidden>
+    <form class="card rec-editor" id="recEditor" autocomplete="off" hidden>
+      <h2 id="re-title">修改命例</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label for="re-name">姓名</label>
+          <input type="text" id="re-name" maxlength="20">
+        </div>
+        <div class="field">
+          <span class="lbl">性别</span>
+          <div class="seg" role="radiogroup" aria-label="性别">
+            <label><input type="radio" name="re-gender" value="1" checked><span>男</span></label>
+            <label><input type="radio" name="re-gender" value="0"><span>女</span></label>
+          </div>
+        </div>
+        <div class="field wide">
+          <span class="lbl">出生时间</span>
+          <div data-dtp="rec"></div>
+        </div>
+        <div class="field wide" data-loc="rec"></div>
+        <div class="field wide">
+          <label for="re-note">备注</label>
+          <input type="text" id="re-note" maxlength="100">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit">保存修改</button>
+        <button class="btn" type="button" id="re-cancel">取消</button>
+      </div>
+    </form>
     <div class="card">
       <h2>命例档案 <span class="sub">保存在本机浏览器中</span></h2>
       <div class="row" style="margin-bottom:12px">
@@ -319,6 +355,8 @@
 <script src="js/ziwei.js"></script>
 <script src="js/explain.js"></script>
 <script src="js/explain-ziwei.js"></script>
+<script src="js/analysis.js"></script>
+<script src="js/views.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

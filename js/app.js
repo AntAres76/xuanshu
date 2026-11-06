@@ -56,7 +56,8 @@
     $$('main > section').forEach(function (s) { s.hidden = s.id !== 'tab-' + name; });
     if (name === 'records') renderRecords();
     if (name === 'almanac' && !almanacInit) initAlmanac();
-    if (name === 'ziwei' && !zwState.res) { var cp = currentProfile(); if (cp) { setZiweiInput(cp.input); } runZiwei(); }
+    if (name === 'ziwei' && !zwState.res) { var cp = currentProfile(); if (cp) { setZiweiInput(cp.input); collapseForm('zw', cp.input); } runZiwei(); }
+    if (name === 'joint') runJoint();
     window.scrollTo(0, 0);
   }
   $$('.tab').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.tab); }); });
@@ -250,20 +251,26 @@
       if (s.ly != null) {
         var lys = Bazi.liuYue(ln.year, res.dayGan, res.ctx);
         var ly = lys[s.ly];
-        if (ly) cols.push(dynPillar('流月', ly.jie + ' ' + ly.startYmd.slice(5), ly.gz, res.ctx, res.dayGan, 6));
+        if (ly) {
+          cols.push(dynPillar('流月', ly.jie + ' ' + ly.startYmd.slice(5), ly.gz, res.ctx, res.dayGan, 6));
+          if (s.ld != null) {
+            var ld = Bazi.liuRi(ly.startYmd, ly.endYmd, res.dayGan)[s.ld];
+            if (ld) cols.push(dynPillar('流日', ld.ymd.slice(5), ld.gz, res.ctx, res.dayGan, 7));
+          }
+        }
       }
     }
     if (cols.length) cols[0].first = true;
     return cols;
   }
 
-  function panTable(res) {
+  function panTable(res, withDyn) {
     var cols = res.pillars.map(function (p, i) {
       return {
         title: p.label, sub: i === 2 ? '日主' : '', gan: p.gan, zhi: p.zhi, ss: p.shishen, hide: p.hide, dishi: p.dishi, zizuo: p.zizuo,
         xunkong: p.xunkong, nayin: p.nayin, shensha: p.shensha, day: i === 2
       };
-    }).concat(selectedCols(res));
+    }).concat(withDyn ? selectedCols(res) : []);
     function cls(c) { return (c.dyn ? 'dyn' : '') + (c.first ? ' dyn-first' : ''); }
     var h = '<div class="pan-wrap"><table class="pan" style="min-width:' + (56 + cols.length * 74) + 'px"><colgroup><col style="width:52px">' + cols.map(function () { return '<col>'; }).join('') + '</colgroup><thead><tr><th></th>';
     cols.forEach(function (c) { h += '<th class="' + cls(c) + '">' + c.title + (c.sub ? '<small>' + esc(c.sub) + '</small>' : '<small>&nbsp;</small>') + '</th>'; });
@@ -293,12 +300,31 @@
     }).join('') + '</div>';
   }
 
-  function renderBazi(res) {
-    var j = res.jieqi, w = res.wx, inp = res.input;
-    var h = '';
-    // 基本信息
-    h += '<div class="card"><h2>' + (res.name ? esc(res.name) + ' · ' : '') + (res.gender === 1 ? '乾造' : '坤造') +
-      '<span class="sub">' + res.pillars.map(function (p) { return p.gz; }).join(' ') + '</span></h2><div class="kv">';
+  /* ---------- 八字结果：分页 ---------- */
+  var BZ_VIEWS = [['overview', '总览'], ['chart', '命盘'], ['links', '相互作用'], ['yun', '运势'], ['detail', '详解']];
+  function baziAn(res) { if (!bzState.an || bzState.an.A.res !== res) bzState.an = AN.bazi(res); return bzState.an; }
+  function panCols(res, withDyn) {
+    var cols = res.pillars.map(function (p) { return { label: p.label, gan: p.gan, zhi: p.zhi }; });
+    if (withDyn) selectedCols(res).forEach(function (c) { cols.push({ label: c.title, gan: c.gan, zhi: c.zhi, dyn: true }); });
+    return cols;
+  }
+  function baziHead(res, an) {
+    var w = res.wx, cur = an.current;
+    return '<div class="card rhead"><div class="rh-main"><div class="mini-pan">' + res.pillars.map(function (p) { return '<div>' + col(p.gan) + '<br>' + col(p.zhi) + '<small>' + p.label.charAt(0) + '</small></div>'; }).join('') + '</div>' +
+      '<div class="rh-txt"><b>' + (res.name ? esc(res.name) + ' · ' : '') + (res.gender === 1 ? '乾造' : '坤造') + '</b><div class="chips">' +
+      '<button type="button" class="chip" data-xp="term|旺衰">' + res.dayGan + res.dayWx + ' · ' + w.level + '</button>' +
+      '<button type="button" class="chip gold" data-xp="ge|' + res.geju.name + '">' + res.geju.name + '</button>' +
+      '<button type="button" class="chip good" data-xp="term|喜用">喜 ' + w.xi.map(function (x) { return x.wx; }).join('') + '</button>' +
+      '<button type="button" class="chip bad" data-xp="term|喜用">忌 ' + w.ji.map(function (x) { return x.wx; }).join('') + '</button>' +
+      (cur ? '<button type="button" class="chip" data-bzv="yun">' + cur.gz + '运 · ' + cur.word + '</button>' : '') + '</div></div></div></div>';
+  }
+  function baziChartView(res, an) {
+    var j = res.jieqi, inp = res.input, h = '';
+    h += '<div class="card"><h2>四柱命盘<span class="sub">虚线的字都能点开</span></h2>' + panTable(res, false);
+    h += '<h3>谁和谁有关系</h3>' + AV.arcGraph(panCols(res, false), res.relations, relKey);
+    h += '</div>';
+    h += '<div class="card"><h2>每个位置意味着什么<span class="sub">外在看天干，内里看地支</span></h2>' + AV.pillarsPlain(an) + '</div>';
+    h += '<div class="card"><h2>基本信息</h2><div class="kv">';
     var inputText = inp.calendar === 'lunar' ? '农历 ' + inp.y + '年' + (inp.leap ? '闰' : '') + LUNAR_MON[inp.m] + '月' + LUNAR_DAY[inp.d] + ' ' + pad(inp.h) + ':' + pad(inp.mi) + '（公历 ' + res.inputSolar.slice(0, 16) + '）' : '公历 ' + res.inputSolar.slice(0, 16);
     h += '<div><b>出生时间</b><span>' + inputText + ' 星期' + Solar.fromYmd(+res.inputSolar.slice(0, 4), +res.inputSolar.slice(5, 7), +res.inputSolar.slice(8, 10)).getWeekInChinese() + '</span></div>';
     if (res.trueSolar || res.adjNotes.length) h += '<div><b>' + xpt('term|真太阳时', res.trueSolar ? '真太阳时' : '校正后') + '</b><span>' + res.solar.slice(0, 16) + '（' + res.adjNotes.join('，') + '）' + (inp.city ? ' · ' + esc(inp.city) : '') + '</span></div>';
@@ -312,21 +338,12 @@
     [['胎元', res.extra.taiYuan], ['胎息', res.extra.taiXi], ['命宫', res.extra.mingGong], ['身宫', res.extra.shenGong]].forEach(function (x) {
       h += '<button type="button" class="chip" data-xp="term|' + (x[0] === '胎元' || x[0] === '胎息' ? '胎元' : '命宫') + '">' + x[0] + ' ' + gzHtml(x[1].gz) + ' <small>' + x[1].nayin + '</small></button>';
     });
-    h += '<button type="button" class="chip gold" data-xp="ge|' + res.geju.name + '">' + res.geju.name + '</button>';
     res.geju.extra.forEach(function (e) { h += '<span class="chip gold">' + e + '</span>'; });
-    h += '</div>' + jumpStrip('bazi') + '</div>';
-
-    // 命盘
-    h += '<div class="card"><h2>四柱命盘<span class="sub">虚线的字都可以点开看原理 · 点选大运流年可加入盘面</span></h2>' + panTable(res);
-    h += '<h3>原局干支关系 <small class="hint">点击任一项，看它为什么成立、牵动了什么</small></h3>' + relHtml(res.relations);
-    var dynRel = dynRelations(res);
-    if (dynRel) h += '<h3>' + dynRel.title + '</h3>' + relHtml(dynRel.list);
-    h += '</div>';
-
-    // 大运流年
-    h += '<div class="card" id="yunCard">' + yunHtml(res) + '</div>';
-
-    // 五行 & 旺衰
+    h += '</div></div>';
+    return h;
+  }
+  function baziDetailView(res) {
+    var w = res.wx, h = '';
     h += '<div class="grid2" style="margin-bottom:14px"><div class="card"><h2>五行力量<span class="sub">' + xpw('term|五行力量', '怎么算的') + '</span></h2><div class="wx-bars">';
     var maxp = Math.max.apply(null, GZ.WX.map(function (k) { return w.pct[k]; })) || 1;
     GZ.WX.forEach(function (k) {
@@ -341,7 +358,6 @@
     var tot = 0; Object.keys(w.lei).forEach(function (k) { tot += w.lei[k]; });
     ['比劫', '印枭', '食伤', '财才', '官杀'].forEach(function (k) { h += '<span class="chip">' + k + ' ' + (tot ? Math.round(w.lei[k] / tot * 100) : 0) + '%</span>'; });
     h += '</div><p class="note">算法：天干计 1，地支藏干按本气/中气/余气分配，月支 ×2、日支 ×1.2，再乘以月令旺相休囚死系数。</p></div>';
-
     h += '<div class="card"><h2>旺衰 · 格局 · 喜用<span class="sub">' + xpw('term|旺衰', '旺衰怎么判') + '</span></h2>';
     h += '<div class="row" style="justify-content:space-between"><span class="big-level">' + w.level + '</span><span class="chips">' +
       '<button type="button" data-xp="term|得令" class="chip ' + (w.deLing ? 'good' : '') + '">' + (w.deLing ? '得令' : '失令') + '</button>' +
@@ -356,8 +372,6 @@
     var xw = w.xi[0].wx, info = GZ.WX_INFO[xw];
     h += '<h3>开运参考（' + wxSpan(xw) + '） ' + xpw('term|开运', '怎么来的') + '</h3><div class="kv"><div><b>颜色</b><span>' + info.color + '</span></div><div><b>方位</b><span>' + info.dir + '方</span></div><div><b>数字</b><span>' + info.num + '</span></div><div><b>脏腑</b><span>' + info.organ + '（宜注意 ' + GZ.WX_INFO[w.ji[0].wx].organ + '）</span></div></div>';
     h += '<p class="note">旺衰与喜用按通用“扶抑 + 调候”法估算，复杂命局（从格、化格、专旺等）请结合人工判断。</p></div></div>';
-
-    // 神煞详解
     var seen = {};
     res.pillars.forEach(function (p) { p.shensha.forEach(function (n) { (seen[n] = seen[n] || []).push(p.label); }); });
     h += '<div class="card"><h2>神煞详解</h2>';
@@ -367,17 +381,56 @@
       return '<div class="detail-item"><div class="h"><span class="' + (ssClass(n) === 'j' ? 'luck-j' : ssClass(n) === 'x' ? 'luck-x' : '') + '">' + n + '</span><small>' + seen[n].join('、') + '</small>' + xpw('sha|' + n, '怎么查 · 为什么') + '</div><p>' + esc(GZ.SHENSHA_INFO[n] || '') + '</p></div>';
     }).join('') + '</div>';
     h += '</div>';
-
-    // 十神释义
     h += '<div class="card"><h2>十神释义<span class="sub">' + xpw('term|十神', '十神是怎么来的') + '</span></h2><div class="detail-grid">';
     var present = {};
     res.pillars.forEach(function (p, i) { if (i !== 2) present[p.shishen] = 1; p.hide.forEach(function (x) { present[x.shishen] = 1; }); });
     Object.keys(GZ.SHISHEN_INFO).forEach(function (k) {
-      h += '<div class="detail-item"' + (present[k] ? '' : ' style="opacity:.5"') + '><div class="h">' + k + '<small>' + GZ.shiShenWx(res.dayGan, k) + (present[k] ? ' · 命局可见' : ' · 命局不见') + '</small>' + xpw('ss|' + k, '详解') + '</div><p>' + GZ.SHISHEN_INFO[k] + '</p></div>';
+      var st = GZ.SS_STATE[k];
+      h += '<div class="detail-item"' + (present[k] ? '' : ' style="opacity:.55"') + '><div class="h">' + k + '<small>' + GZ.shiShenWx(res.dayGan, k) + (present[k] ? ' · 命局可见' : ' · 命局不见') + '</small>' + xpw('ss|' + k, '详解') + '</div><p><b>助力时：</b>' + st.good + '。<br><b>负担时：</b>' + st.bad + '。</p></div>';
     });
     h += '</div></div>';
-
-    $('#baziResult').innerHTML = h;
+    return h;
+  }
+  function baziYunView(res, an) {
+    var h = '<div class="card" id="yunCard">' + yunHtml(res, an) + '</div>';
+    var ps = bzPeriods(res, an);
+    if (ps.length) {
+      h += '<div class="card"><h2>这段时间会怎样<span class="sub">由大到小，一层套一层</span></h2>';
+      ps.forEach(function (P, i) { h += AV.periodPanel(P, i === ps.length - 1); });
+      h += '<p class="note">运势判断只看干支与原局的作用，不知道你实际在做什么。同样的“冲”，可能是搬家，也可能是换工作。' + xpw('term|流年', '流年怎么看') + '</p></div>';
+    }
+    var dynRel = dynRelations(res);
+    h += '<div class="card"><h2>叠加到命盘上<span class="sub">图中只画运岁带来的关系，原局的在“命盘”页</span></h2>' + panTable(res, true) + AV.arcGraph(panCols(res, true), dynRel ? dynRel.list : [], relKey);
+    if (dynRel) h += '<h3>' + dynRel.title + '</h3>' + relHtml(dynRel.list);
+    h += '</div>';
+    return h;
+  }
+  /** 当前选中的各层时段 */
+  function bzPeriods(res, an) {
+    var s = bzState.sel, out = [], parents = [];
+    var dy = res.yun.daYun[s.dy];
+    if (!dy) return out;
+    if (dy.gz) { var P0 = AN.period(an.A, dy.gz, '大运', []); out.push(P0); parents.push({ label: '大运', gz: dy.gz }); }
+    var ln = dy.liuNian[s.ln];
+    if (!ln) return out;
+    out.push(AN.period(an.A, ln.gz, '流年', parents.slice())); parents.push({ label: '流年', gz: ln.gz });
+    if (s.ly == null) return out;
+    var ly = Bazi.liuYue(ln.year, res.dayGan, res.ctx)[s.ly];
+    if (!ly) return out;
+    out.push(AN.period(an.A, ly.gz, '流月', parents.slice())); parents.push({ label: '流月', gz: ly.gz });
+    if (s.ld == null) return out;
+    var d = Bazi.liuRi(ly.startYmd, ly.endYmd, res.dayGan)[s.ld];
+    if (d) { var pd = AN.period(an.A, d.gz, '流日', parents.slice()); out.push(pd); }
+    return out;
+  }
+  function renderBazi(res) {
+    var an = baziAn(res), view = bzState.view || 'overview', h = baziHead(res, an) + AV.subtabs(BZ_VIEWS, view, 'data-bzv') + '<div class="view">';
+    if (view === 'overview') h += AV.baziOverview(an, res, jumpStrip('bazi'));
+    else if (view === 'chart') h += baziChartView(res, an);
+    else if (view === 'links') h += AV.linksView(an);
+    else if (view === 'yun') h += baziYunView(res, an);
+    else h += baziDetailView(res);
+    $('#baziResult').innerHTML = h + '</div>';
   }
 
   function dynRelations(res) {
@@ -390,14 +443,17 @@
     return { title: dynLabels.join('、') + '与原局关系', list: list };
   }
 
-  function yunHtml(res) {
+  function yunHtml(res, an) {
     var y = res.yun, s = bzState.sel, nowY = new Date().getFullYear(), today = todayYmd();
-    var h = '<h2>大运 · 流年 · 流月 · 流日<span class="sub">' + xpw('term|大运', (y.forward ? '顺排' : '逆排') + '，为什么') + '</span></h2>';
+    function sc(sig) { return ' sg' + (sig + 2); }
+    var h = '<h2>大运 · 流年 · 流月 · 流日<span class="sub"><button type="button" class="btn sm" data-bz-today="1">回到今天</button> ' + xpw('term|大运', (y.forward ? '顺排' : '逆排') + '，为什么') + '</span></h2>';
     h += '<p class="desc">出生后 <b>' + y.startYear + '</b> 年 <b>' + y.startMonth + '</b> 个月 <b>' + y.startDay + '</b> 天' + (y.startHour ? ' <b>' + y.startHour + '</b> 小时' : '') + '起运，于公历 <b>' + y.startSolar + '</b> 交运' + (y.jiaoYun ? '；' + y.jiaoYun : '') + '。</p>';
-    h += '<div class="yun-sec-title"><b>大运</b><span>点击查看该运十年流年</span></div><div class="strip">';
+    h += '<div class="legend sig-legend"><span class="sgk sg4"></span>有利<span class="sgk sg3"></span>偏有利<span class="sgk sg2"></span>平稳<span class="sgk sg1"></span>需留意<span class="sgk sg0"></span>压力较大<span>（颜色是软件估算）</span></div>';
+    h += '<div class="yun-sec-title"><b>大运</b><span>每步十年</span></div><div class="strip">';
     y.daYun.forEach(function (d, i) {
       var isNow = nowY >= d.startYear && nowY <= d.endYear;
-      h += '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + '" data-dy="' + i + '" aria-pressed="' + (s.dy === i) + '">' +
+      var P = d.gz ? an.timeline.filter(function (t) { return t.index === d.index; })[0] : null;
+      h += '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + (P ? sc(P.signal) : '') + '" data-dy="' + i + '" aria-pressed="' + (s.dy === i) + '">' +
         '<div class="t">' + d.startAge + '–' + d.endAge + '岁</div>' +
         '<div class="g">' + (d.gz ? gzHtml(d.gz) : '<span style="font-size:15px">小运</span>') + '</div>' +
         '<div class="s">' + (d.gz ? d.ssGan + '·' + d.ssZhi : '起运前') + '</div><div class="t">' + d.startYear + '</div></button>';
@@ -405,9 +461,11 @@
     h += '</div>';
     var dy = y.daYun[s.dy];
     if (dy) {
+      var dyP = dy.gz ? [{ label: '大运', gz: dy.gz }] : [];
       h += '<div class="yun-sec-title"><b>' + xpt('term|流年', '流年') + '</b><span>' + (dy.gz ? dy.gz + '运 ' : '起运前 ') + dy.startYear + '–' + dy.endYear + '</span></div><div class="strip">';
       dy.liuNian.forEach(function (ln, i) {
-        h += '<button type="button" class="yun-cell' + (ln.year === nowY ? ' now' : '') + '" data-ln="' + i + '" aria-pressed="' + (s.ln === i) + '">' +
+        var P = AN.period(an.A, ln.gz, '流年', dyP);
+        h += '<button type="button" class="yun-cell' + (ln.year === nowY ? ' now' : '') + sc(P.signal) + '" data-ln="' + i + '" aria-pressed="' + (s.ln === i) + '">' +
           '<div class="t">' + ln.year + ' · ' + ln.age + '岁</div><div class="g">' + gzHtml(ln.gz) + '</div><div class="s">' + ln.ssGan + '·' + ln.ssZhi + '</div>' +
           (ln.taisui.length ? '<span class="flag">' + ln.taisui.map(function (t) { return t.replace('（本命年）', ''); }).join(' ') + '</span>' : '<span class="flag">&nbsp;</span>') + '</button>';
       });
@@ -417,20 +475,21 @@
         h += '<div class="kv" style="margin:4px 0 6px"><div><b>' + ln.year + '年</b><span>' + gzHtml(ln.gz) + ' ' + ln.nayin + ' · ' + ln.ssGan + '/' + ln.ssZhi + ' · 星运' + ln.dishi + '</span></div>' +
           '<div><b>' + xpt('term|流年', '太岁') + '</b><span>' + (ln.taisui.length ? ln.taisui.join('、') : '不犯太岁') + '</span></div>' +
           '<div><b>岁煞</b><span>' + (ln.shensha.length ? ln.shensha.map(function (n) { return xpt('sha|' + n, n, ssClass(n) === 'j' ? 'luck-j' : ssClass(n) === 'x' ? 'luck-x' : ''); }).join(' ') : '—') + '</span></div></div>';
-        var lys = Bazi.liuYue(ln.year, res.dayGan, res.ctx);
+        var lys = Bazi.liuYue(ln.year, res.dayGan, res.ctx), lnP = dyP.concat([{ label: '流年', gz: ln.gz }]);
         h += '<div class="yun-sec-title"><b>' + xpt('term|流月', '流月') + '</b><span>' + ln.year + '年（以节换月）</span></div><div class="strip">';
         lys.forEach(function (m, i) {
-          var isNow = today >= m.startYmd && today < m.endYmd;
-          h += '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + '" data-ly="' + i + '" aria-pressed="' + (s.ly === i) + '">' +
+          var isNow = today >= m.startYmd && today < m.endYmd, P = AN.period(an.A, m.gz, '流月', lnP);
+          h += '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + sc(P.signal) + '" data-ly="' + i + '" aria-pressed="' + (s.ly === i) + '">' +
             '<div class="t">' + m.jie + ' ' + m.startYmd.slice(5) + '</div><div class="g">' + gzHtml(m.gz) + '</div><div class="s">' + m.ssGan + '·' + m.ssZhi + '</div></button>';
         });
         h += '</div>';
         var ly = s.ly != null ? lys[s.ly] : null;
         if (ly) {
-          var days = Bazi.liuRi(ly.startYmd, ly.endYmd, res.dayGan);
-          h += '<div class="yun-sec-title"><b>流日</b><span>' + ly.gz + '月 ' + ly.startYmd + ' 至 ' + days[days.length - 1].ymd + '</span></div><div class="days">';
-          days.forEach(function (d) {
-            h += '<div class="day' + (d.ymd === today ? ' today' : '') + '"><div class="d">' + d.ymd.slice(5) + ' ' + d.week + (d.jieqi ? ' <span class="jq">' + d.jieqi + '</span>' : '') + '</div><div class="g">' + gzHtml(d.gz) + '</div><div>' + d.ssGan + '·' + d.ssZhi + '</div><div class="d">' + d.lunar + '</div></div>';
+          var days = Bazi.liuRi(ly.startYmd, ly.endYmd, res.dayGan), lyP = lnP.concat([{ label: '流月', gz: ly.gz }]);
+          h += '<div class="yun-sec-title"><b>流日</b><span>' + ly.gz + '月 ' + ly.startYmd + ' 至 ' + days[days.length - 1].ymd + '。点一天看当天</span></div><div class="days">';
+          days.forEach(function (d, i) {
+            var P = AN.period(an.A, d.gz, '流日', lyP);
+            h += '<button type="button" class="day' + (d.ymd === today ? ' today' : '') + sc(P.signal) + '" data-ld="' + i + '" aria-pressed="' + (s.ld === i) + '"><div class="d">' + d.ymd.slice(5) + ' ' + d.week + (d.jieqi ? ' <span class="jq">' + d.jieqi + '</span>' : '') + '</div><div class="g">' + gzHtml(d.gz) + '</div><div>' + d.ssGan + '·' + d.ssZhi + '</div><div class="d">' + d.lunar + '</div></button>';
           });
           h += '</div>';
         }
@@ -444,7 +503,7 @@
 
   function defaultSel(res) {
     var nowY = new Date().getFullYear(), today = todayYmd();
-    var sel = { dy: 1, ln: 0, ly: null };
+    var sel = { dy: 1, ln: 0, ly: null, ld: null };
     res.yun.daYun.forEach(function (d, i) {
       if (nowY >= d.startYear && nowY <= d.endYear) {
         sel.dy = i;
@@ -454,7 +513,12 @@
     var dy = res.yun.daYun[sel.dy];
     if (dy && dy.liuNian[sel.ln]) {
       var lys = Bazi.liuYue(dy.liuNian[sel.ln].year, res.dayGan, res.ctx);
-      lys.forEach(function (m, i) { if (today >= m.startYmd && today < m.endYmd) sel.ly = i; });
+      lys.forEach(function (m, i) {
+        if (today >= m.startYmd && today < m.endYmd) {
+          sel.ly = i;
+          Bazi.liuRi(m.startYmd, m.endYmd, res.dayGan).forEach(function (d, k) { if (d.ymd === today) sel.ld = k; });
+        }
+      });
     }
     return sel;
   }
@@ -473,18 +537,25 @@
   }
   $('#baziForm').addEventListener('submit', function (e) {
     e.preventDefault(); var ip = baziInput();
-    if (runBazi(ip)) rememberProfile(ip);
+    if (runBazi(ip)) { rememberProfile(ip); collapseForm('bz', ip); }
     var r = $('#baziResult'); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   $('#bz-now').addEventListener('click', function () { bzDtp.setNow(); });
   $('#bz-print').addEventListener('click', function () { if (!bzState.res) runBazi(); setTimeout(function () { window.print(); }, 50); });
   $('#baziResult').addEventListener('click', function (e) {
-    if (e.target.closest('[data-xp]')) return;
-    var b = e.target.closest('.yun-cell'); if (!b || !bzState.res) return;
+    if (e.target.closest('[data-xp]') || !bzState.res) return;
+    var sw = e.target.closest('[data-bzv]'), gs = e.target.closest('[data-go-sub]');
+    if (sw || gs) {
+      bzState.view = sw ? sw.getAttribute('data-bzv') : gs.getAttribute('data-go-sub');
+      var sy0 = window.scrollY; renderBazi(bzState.res); window.scrollTo(0, sw && sw.classList.contains('chip') ? 0 : sy0); return;
+    }
+    if (e.target.closest('[data-bz-today]')) { bzState.sel = defaultSel(bzState.res); var sy1 = window.scrollY; renderBazi(bzState.res); window.scrollTo(0, sy1); return; }
+    var b = e.target.closest('.yun-cell, .day[data-ld]'); if (!b) return;
     var s = bzState.sel;
-    if (b.dataset.dy != null) { s.dy = +b.dataset.dy; s.ln = 0; s.ly = null; }
-    else if (b.dataset.ln != null) { s.ln = +b.dataset.ln; s.ly = null; }
-    else if (b.dataset.ly != null) { s.ly = s.ly === +b.dataset.ly ? null : +b.dataset.ly; }
+    if (b.dataset.dy != null) { s.dy = +b.dataset.dy; s.ln = 0; s.ly = null; s.ld = null; }
+    else if (b.dataset.ln != null) { s.ln = +b.dataset.ln; s.ly = null; s.ld = null; }
+    else if (b.dataset.ly != null) { s.ly = s.ly === +b.dataset.ly ? null : +b.dataset.ly; s.ld = null; }
+    else if (b.dataset.ld != null) { s.ld = s.ld === +b.dataset.ld ? null : +b.dataset.ld; }
     var sy = window.scrollY;
     renderBazi(bzState.res);
     window.scrollTo(0, sy);
@@ -520,7 +591,7 @@
     $('#recList').innerHTML = list.map(function (r) {
       return '<div class="rec" data-id="' + r.id + '"><div><div class="nm">' + esc(r.name || '未命名') + ' <span class="chip">' + (+r.gender === 1 ? '男' : '女') + '</span>' + (r.auto ? ' <span class="chip">自动保存</span>' : '') + '</div>' +
         '<div class="bz">' + r.bazi.split(' ').map(gzHtml).join(' ') + '</div><div class="meta">公历 ' + esc(r.solar) + (r.input.city ? ' · ' + esc(r.input.city) : '') + (r.note ? ' · ' + esc(r.note) : '') + '</div></div>' +
-        '<div class="row rec-acts"><button class="btn sm primary" data-act="open">八字</button><button class="btn sm primary" data-act="ziwei">紫微</button><button class="btn sm" data-act="hha">合婚甲</button><button class="btn sm" data-act="hhb">合婚乙</button><button class="btn sm" data-act="qm">奇门年命</button><button class="btn sm" data-act="rename">改名</button><button class="btn sm" data-act="note">备注</button><button class="btn sm" data-act="del">删除</button></div></div>';
+        '<div class="row rec-acts"><button class="btn sm primary" data-act="edit">修改</button><button class="btn sm" data-act="open">八字</button><button class="btn sm" data-act="ziwei">紫微</button><button class="btn sm" data-act="joint">综合</button><button class="btn sm" data-act="hha">合婚甲</button><button class="btn sm" data-act="hhb">合婚乙</button><button class="btn sm" data-act="qm">奇门</button><button class="btn sm" data-act="del">删除</button></div></div>';
     }).join('');
   }
   $('#rec-q').addEventListener('input', renderRecords);
@@ -528,13 +599,13 @@
     var b = e.target.closest('button[data-act]'); if (!b) return;
     var id = b.closest('.rec').dataset.id, list = records(), r = list.filter(function (x) { return x.id === id; })[0];
     if (!r) return;
-    if (b.dataset.act === 'open') { applyProfile(r, { run: false }); showTab('bazi'); runBazi(r.input); }
-    else if (b.dataset.act === 'ziwei') { applyProfile(r, { run: false }); showTab('ziwei'); runZiwei(r.input); }
+    if (b.dataset.act === 'edit') { openRecEditor(r); }
+    else if (b.dataset.act === 'open') { applyProfile(r, { run: false }); showTab('bazi'); runBazi(r.input); collapseForm('bz', r.input); }
+    else if (b.dataset.act === 'ziwei') { applyProfile(r, { run: false }); showTab('ziwei'); runZiwei(r.input); collapseForm('zw', r.input); }
+    else if (b.dataset.act === 'joint') { applyProfile(r, { run: false }); showTab('joint'); }
     else if (b.dataset.act === 'hha' || b.dataset.act === 'hhb') { hhFill(b.dataset.act.slice(-1), r); showTab('hehun'); toast('已填入' + (b.dataset.act === 'hha' ? '甲方' : '乙方')); }
     else if (b.dataset.act === 'qm') { applyProfile(r, { run: false }); showTab('qimen'); runQimen(); toast('已标注年命 ' + r.bazi.split(' ')[0]); }
-    else if (b.dataset.act === 'rename') { var nn = prompt('姓名：', r.name || ''); if (nn != null) { r.name = nn.trim(); r.input.name = r.name; r.auto = false; saveRecords(list); renderRecords(); refreshProfiles(); } }
     else if (b.dataset.act === 'del') { if (confirm('删除“' + (r.name || '未命名') + '”？')) { saveRecords(list.filter(function (x) { return x.id !== id; })); renderRecords(); refreshProfiles(); } }
-    else if (b.dataset.act === 'note') { var n = prompt('备注：', r.note || ''); if (n != null) { r.note = n; saveRecords(list); renderRecords(); } }
   });
   $('#rec-export').addEventListener('click', function () {
     var fname = '命例档案-' + todayYmd() + '.json';
@@ -631,7 +702,7 @@
     h += '</div></div>';
 
     // 右侧：宫位详解 + 格局
-    h += '<div><div class="card" id="qmDetail">' + palaceDetail(r, qmState.sel || r.zhiFuLand) + '</div>';
+    h += '<div>' + AV.qimenCard(r, Qimen, currentProfile() && bzState.res ? baziAn(bzState.res) : null, '这一局对你意味着什么') + '<div class="card" id="qmDetail">' + palaceDetail(r, qmState.sel || r.zhiFuLand) + '</div>';
     h += '<div class="card"><h2>格局汇总<span class="sub">点击格局名看成立条件和出处</span></h2>';
     var all = [];
     r.patterns.forEach(function (p) { all.push({ p: p, where: '全局' }); });
@@ -964,7 +1035,7 @@
   var zwLoc = new Loc($('[data-loc="zw"]'), { id: 'zw' });
   zwDtp.onChange = function () { try { zwLoc.checkDst(zwDtp.solar()); } catch (e) { } };
   zwDtp.set({ calendar: 'solar', y: 1990, m: 1, d: 1, h: 12, mi: 0 });
-  var zwState = { res: null, sel: null, dx: null, ly: null, lm: null };
+  var zwState = { res: null, an: null, view: 'overview', sel: null, dx: null, ly: null, lm: null, lmLeap: false, ld: null };
   // 盘面位置：地支序号 → [列, 行]（4×4 外圈）
   var ZW_CELL = { 5: [0, 0], 6: [1, 0], 7: [2, 0], 8: [3, 0], 9: [3, 1], 10: [3, 2], 11: [3, 3], 0: [2, 3], 1: [1, 3], 2: [0, 3], 3: [0, 2], 4: [0, 1] };
 
@@ -985,8 +1056,9 @@
     zwLoc.set({ city: inp.city, longitude: inp.longitude === '' || inp.longitude == null ? null : +inp.longitude, tz: inp.tz == null || inp.tz === '' ? 8 : +inp.tz, trueSolar: !!inp.trueSolar && inp.trueSolar !== 'false' && inp.trueSolar !== '0', dst: !!inp.dst && inp.dst !== 'false' && inp.dst !== '0' });
   }
 
-  function zwOverlays(r) {
+  function zwOverlays(r, on) {
     var ov = {};
+    if (on === false) return ov;
     var d = zwState.dx != null ? r.daxian[zwState.dx] : null;
     if (d) ov.dx = Ziwei.overlay(r, d.b, d.gan);
     if (zwState.ly != null) {
@@ -994,8 +1066,14 @@
       ov.ly = Ziwei.overlay(r, GZ.zi(gz.charAt(1)), gz.charAt(0));
       ov.lyGz = gz;
       if (zwState.lm != null) {
-        var ms = Ziwei.liuYue(r, zwState.ly), m = ms[zwState.lm];
-        if (m) { ov.lm = Ziwei.overlay(r, m.b, m.stem); ov.lmInfo = m; }
+        var m = Ziwei.liuYue(r, zwState.ly)[zwState.lm];
+        if (m) {
+          ov.lm = Ziwei.overlay(r, m.b, m.stem); ov.lmInfo = m;
+          if (zwState.ld != null) {
+            var dd = Ziwei.liuRi(r, zwState.ly, m.k, zwState.lmLeap)[zwState.ld];
+            if (dd) { ov.ld = Ziwei.overlay(r, dd.b, dd.stem); ov.ldInfo = dd; }
+          }
+        }
       }
     }
     return ov;
@@ -1003,7 +1081,7 @@
   function zwStarHtml(s, ov, cls) {
     var marks = '';
     if (s.hua) marks += '<i class="hua h-' + s.hua + '">' + s.hua + '</i>';
-    [['dx', '大'], ['ly', '年'], ['lm', '月']].forEach(function (x) {
+    [['dx', '大'], ['ly', '年'], ['lm', '月'], ['ld', '日']].forEach(function (x) {
       var o = ov[x[0]]; if (!o) return;
       o.hua.forEach(function (h) { if (h.star === s.name) marks += '<i class="hua hy h-' + h.hua + '">' + x[1] + h.hua + '</i>'; });
     });
@@ -1024,6 +1102,7 @@
       if (ov.dx) runs += '<span class="zrun d">大' + ov.dx.names[b].replace('宫', '') + '</span>';
       if (ov.ly) runs += '<span class="zrun y">年' + ov.ly.names[b].replace('宫', '') + '</span>';
       if (ov.lm) runs += '<span class="zrun m">月' + ov.lm.names[b].replace('宫', '') + '</span>';
+      if (ov.ld) runs += '<span class="zrun r">日' + ov.ld.names[b].replace('宫', '') + '</span>';
       h += '<div class="' + cl + '" data-zb="' + b + '" tabindex="0" role="button" aria-label="' + P.name + ' ' + P.gan + P.zhi + '" style="grid-column:' + (c[0] + 1) + ';grid-row:' + (c[1] + 1) + '">' +
         '<div class="zw-stars">' + P.major.map(function (s) { return zwStarHtml(s, ov, 'zm' + (Ziwei.BRIGHT_RANK[s.bright] <= 1 ? ' dim' : '')); }).join('') + '</div>' +
         '<div class="zw-aux">' + P.aux.map(function (s) { return zwStarHtml(s, ov, 'za'); }).concat(P.sha.map(function (s) { return zwStarHtml(s, ov, 'zs'); })).join('') + '</div>' +
@@ -1032,7 +1111,6 @@
         '<div class="zw-foot"><div class="zw-god">' + P.changsheng + ' · ' + P.boshi + '<br>' + P.daxian[0] + '–' + P.daxian[1] + '</div><div class="zw-name">' + badges + '<span class="pn">' + P.name + '</span><span class="gz">' + col(P.gan) + col(P.zhi) + '</span></div></div>' +
         '</div>';
     }
-    // 中宫
     var L0 = r.L;
     h += '<div class="zw-center" style="grid-column:2 / span 2;grid-row:2 / span 2">' +
       '<div class="zc-title">' + (r.name ? esc(r.name) + ' · ' : '') + r.genderText + '</div>' +
@@ -1044,57 +1122,87 @@
       '<div class="zc-line hua-line">' + r.sihua.map(function (x) { return xpt('zwh|' + x.hua, x.star + '<i class="hua h-' + x.hua + '">' + x.hua + '</i>'); }).join(' ') + '</div>' +
       '<div class="zc-line">' + xpt('zw|排盘过程', '这张盘怎么排出来的') + '</div>' +
       '</div>';
-    // 三方四正连线
-    var cen = function (x) { var c = ZW_CELL[x]; return [c[0] * 100 + 50, c[1] * 100 + 50]; };
+    var cen = function (x) { var q = ZW_CELL[x]; return [q[0] * 100 + 50, q[1] * 100 + 50]; };
     var a = cen(sel), t1 = cen(sf[1]), t2 = cen(sf[2]), o = cen(opp);
     h += '<svg class="zw-lines" viewBox="0 0 400 400" preserveAspectRatio="none" aria-hidden="true">' +
       '<polygon points="' + [a, t1, t2].map(function (p) { return p.join(','); }).join(' ') + '" class="ztri"/>' +
       '<line x1="' + a[0] + '" y1="' + a[1] + '" x2="' + o[0] + '" y2="' + o[1] + '" class="zopp"/></svg>';
     h += '</div></div>';
-    h += '<div class="legend"><span>金框：所选宫</span><span>实线三角：三合</span><span>虚线：对宫</span><span>彩色“禄权科忌”：生年四化</span><span>“大/年/月”：运限四化</span>' + xpt('zw|三方四正', '三方四正是什么') + xpt('zw|亮度', '亮度是什么') + '</div>';
+    h += '<div class="legend"><span>金框：所选宫</span><span>实线三角：三合</span><span>虚线：对宫</span><span>彩色“禄权科忌”：生年四化</span><span>“大/年/月/日”：运限四化</span>' + xpt('zw|三方四正', '三方四正是什么') + xpt('zw|亮度', '亮度是什么') + '</div>';
     return h;
   }
   function zwTimeline(r) {
     var nowY = new Date().getFullYear();
-    var h = '<h2>大限 · 流年 · 流月<span class="sub">' + r.genderText + ' · ' + (r.shun ? '顺行' : '逆行') + '</span></h2>';
-    h += '<div class="yun-sec-title"><b>' + xpt('zw|大限', '大限') + '</b><span>每宫十年。点选后，盘上标出大限十二宫和大限四化，再点一次取消</span></div><div class="strip">';
+    function sc(sig) { return ' sg' + (sig + 2); }
+    var h = '<h2>大限 · 流年 · 流月 · 流日<span class="sub"><button type="button" class="btn sm" data-zw-today="1">回到今天</button> ' + r.genderText + ' · ' + (r.shun ? '顺行' : '逆行') + '</span></h2>';
+    h += '<div class="legend sig-legend"><span class="sgk sg4"></span>有利<span class="sgk sg3"></span>偏有利<span class="sgk sg2"></span>平稳<span class="sgk sg1"></span>需留意<span class="sgk sg0"></span>压力较大<span>（颜色是软件估算）</span></div>';
+    h += '<div class="yun-sec-title"><b>' + xpt('zw|大限', '大限') + '</b><span>每宫十年，再点一次取消</span></div><div class="strip">';
     var nowAge = Ziwei.nominalAge(r, nowY);
     r.daxian.forEach(function (d) {
-      var isNow = nowAge >= d.from && nowAge <= d.to;
-      h += '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + '" data-zd="' + d.i + '" aria-pressed="' + (zwState.dx === d.i) + '">' +
+      var isNow = nowAge >= d.from && nowAge <= d.to, X = AN.zwRun(r, '大限', d.b, d.gan, []);
+      h += '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + sc(X.signal) + '" data-zd="' + d.i + '" aria-pressed="' + (zwState.dx === d.i) + '">' +
         '<div class="t">' + d.from + '–' + d.to + '岁</div><div class="g">' + gzHtml(d.gan + d.zhi) + '</div><div class="s">' + d.palace + '</div></button>';
     });
     h += '</div>';
     var dx = zwState.dx != null ? r.daxian[zwState.dx] : null;
+    var par = dx ? [{ level: '大限', anchor: dx.b, stem: dx.gan }] : [];
     if (dx) {
       var y0 = r.L.lunarYear + dx.from - 1;
       h += '<div class="yun-sec-title"><b>' + xpt('zw|流年', '流年') + '</b><span>' + dx.gan + dx.zhi + '限 · 虚岁计</span></div><div class="strip">';
       for (var i = 0; i < 10; i++) {
-        var y = y0 + i, gz = Ziwei.yearGz(y), age = Ziwei.nominalAge(r, y), xb = Ziwei.xiaoxianBranch(r, age);
-        h += '<button type="button" class="yun-cell' + (y === nowY ? ' now' : '') + '" data-zy="' + y + '" aria-pressed="' + (zwState.ly === y) + '">' +
+        var y = y0 + i, gz = Ziwei.yearGz(y), age = Ziwei.nominalAge(r, y), xb = Ziwei.xiaoxianBranch(r, age), Xy = AN.zwRun(r, '流年', GZ.zi(gz.charAt(1)), gz.charAt(0), par);
+        h += '<button type="button" class="yun-cell' + (y === nowY ? ' now' : '') + sc(Xy.signal) + '" data-zy="' + y + '" aria-pressed="' + (zwState.ly === y) + '">' +
           '<div class="t">' + y + ' · ' + age + '岁</div><div class="g">' + gzHtml(gz) + '</div><div class="s">小限 ' + r.palaces[xb].name.replace('宫', '') + '</div></button>';
       }
       h += '</div>';
     }
     if (zwState.ly != null) {
-      var ms = Ziwei.liuYue(r, zwState.ly);
+      var gzY = Ziwei.yearGz(zwState.ly), parY = par.concat([{ level: '流年', anchor: GZ.zi(gzY.charAt(1)), stem: gzY.charAt(0) }]);
+      var ms = Ziwei.liuYue(r, zwState.ly), leapM = LunarYear.fromYear(zwState.ly).getLeapMonth();
+      var td = Ziwei.today(r, Solar.fromDate(new Date()));
       h += '<div class="yun-sec-title"><b>' + xpt('zw|斗君', '流月') + '</b><span>' + zwState.ly + ' 年，斗君（正月）在 ' + GZ.ZHI[Ziwei.douJun(r, zwState.ly)] + ' 宫</span></div><div class="strip">';
       ms.forEach(function (m, idx) {
-        h += '<button type="button" class="yun-cell" data-zm="' + idx + '" aria-pressed="' + (zwState.lm === idx) + '">' +
-          '<div class="t">' + LUNAR_MON[m.k] + '月</div><div class="g">' + gzHtml(m.gz) + '</div><div class="s">' + r.palaces[m.b].name.replace('宫', '') + '</div></button>';
+        var Xm = AN.zwRun(r, '流月', m.b, m.stem, parY);
+        function cell(leap) {
+          var isNow = td.y === zwState.ly && td.k === m.k && td.leap === leap;
+          return '<button type="button" class="yun-cell' + (isNow ? ' now' : '') + sc(Xm.signal) + '" data-zm="' + idx + '" data-leap="' + (leap ? 1 : 0) + '" aria-pressed="' + (zwState.lm === idx && !!zwState.lmLeap === leap) + '">' +
+            '<div class="t">' + (leap ? '闰' : '') + LUNAR_MON[m.k] + '月</div><div class="g">' + gzHtml(m.gz) + '</div><div class="s">' + r.palaces[m.b].name.replace('宫', '') + '</div></button>';
+        }
+        h += cell(false);
+        if (leapM === m.k) h += cell(true);
       });
       h += '</div>';
-    }
-    var ov = zwOverlays(r), notes = [];
-    if (ov.dx) notes.push('<b>大限四化</b>（' + ov.dx.stem + '干）：' + ov.dx.hua.map(function (x) { return x.star + '化' + x.hua + '入本命' + x.palace; }).join('，'));
-    if (ov.ly) notes.push('<b>流年四化</b>（' + ov.lyGz + '）：' + ov.ly.hua.map(function (x) { return x.star + '化' + x.hua + '入本命' + x.palace; }).join('，') + '。流年命宫在 ' + r.palaces[ov.ly.anchor].zhi + '（本命' + r.palaces[ov.ly.anchor].name + '）');
-    if (ov.lm) notes.push('<b>流月四化</b>（' + ov.lmInfo.gz + '）：' + ov.lm.hua.map(function (x) { return x.star + '化' + x.hua + '入本命' + x.palace; }).join('，'));
-    if (notes.length) h += '<div class="zw-notes">' + notes.map(function (n) { return '<p class="desc">' + n + '</p>'; }).join('') + '</div>';
-    if (zwState.ly != null) {
-      var a2 = Ziwei.nominalAge(r, zwState.ly);
-      if (a2 < r.ju) h += '<p class="note">虚岁 ' + a2 + ' 还没到第一个大限（' + r.ju + ' 岁），古法看“童限”（一命二财三疾厄，四妻五福六官禄）。</p>';
+      if (zwState.lm != null) {
+        var mm = ms[zwState.lm], parM = parY.concat([{ level: '流月', anchor: mm.b, stem: mm.stem }]);
+        var ds = Ziwei.liuRi(r, zwState.ly, mm.k, zwState.lmLeap);
+        h += '<div class="yun-sec-title"><b>流日</b><span>' + (zwState.lmLeap ? '闰' : '') + LUNAR_MON[mm.k] + '月，从流月命宫起初一顺数。点一天看当天</span></div><div class="days">';
+        var nowYmd = todayYmd();
+        ds.forEach(function (d, i) {
+          var Xd = AN.zwRun(r, '流日', d.b, d.stem, parM);
+          h += '<button type="button" class="day' + (d.ymd === nowYmd ? ' today' : '') + sc(Xd.signal) + '" data-zr="' + i + '" aria-pressed="' + (zwState.ld === i) + '"><div class="d">' + LUNAR_DAY[d.d] + ' · ' + d.ymd.slice(5) + '</div><div class="g">' + gzHtml(d.gz) + '</div><div>' + r.palaces[d.b].name.replace('宫', '') + '</div></button>';
+        });
+        h += '</div>';
+      }
     }
     return h;
+  }
+  function zwRunsOf(r) {
+    var out = [], par = [];
+    var dx = zwState.dx != null ? r.daxian[zwState.dx] : null;
+    if (dx) { var a = AN.zwRun(r, '大限', dx.b, dx.gan, []); a.gz = dx.gan + dx.zhi; out.push(a); par.push({ level: '大限', anchor: dx.b, stem: dx.gan }); }
+    if (zwState.ly != null) {
+      var gz = Ziwei.yearGz(zwState.ly), b = AN.zwRun(r, '流年', GZ.zi(gz.charAt(1)), gz.charAt(0), par.slice()); b.gz = gz; out.push(b);
+      par.push({ level: '流年', anchor: b.anchor, stem: gz.charAt(0) });
+      if (zwState.lm != null) {
+        var m = Ziwei.liuYue(r, zwState.ly)[zwState.lm], c = AN.zwRun(r, '流月', m.b, m.stem, par.slice()); c.gz = m.gz; out.push(c);
+        par.push({ level: '流月', anchor: m.b, stem: m.stem });
+        if (zwState.ld != null) {
+          var d = Ziwei.liuRi(r, zwState.ly, m.k, zwState.lmLeap)[zwState.ld];
+          if (d) { var e = AN.zwRun(r, '流日', d.b, d.stem, par.slice()); e.gz = d.gz; out.push(e); }
+        }
+      }
+    }
+    return out;
   }
   function zwDetail(r) {
     var b = zwState.sel == null ? r.ming : zwState.sel, P = r.palaces[b], sf = Ziwei.sanFang(b);
@@ -1108,52 +1216,65 @@
       h += '<button type="button" class="zsf-i" data-zb="' + x[0] + '"><small>' + x[1] + '</small><b>' + Q.name + '</b><span>' + (Q.major.map(function (s) { return s.name; }).join('、') || '空宫') + '</span></button>';
     });
     h += '</div>';
-    h += '<h3>' + xpt('zw|飞化', '宫干飞化') + '（' + P.gan + '干）</h3><div class="chips">';
+    h += '<h3>' + xpt('zw|飞化', '这一宫的事影响到哪里') + '（' + P.gan + '干）</h3><ul class="tlist">';
     Ziwei.feiHua(r, b).forEach(function (f) {
-      h += '<span class="chip' + (f.hua === '忌' ? ' bad' : f.hua === '禄' ? ' good' : '') + '">' + f.star + '化' + f.hua + ' → ' + f.palace + (f.self ? '（自化）' : '') + '</span>';
+      h += '<li class="' + (f.hua === '忌' ? 'bad' : f.hua === '禄' ? 'good' : '') + '"><i class="hua h-' + f.hua + '">' + f.hua + '</i> ' + (f.self ? '力量留在本宫（自化），这方面的' + (f.hua === '忌' ? '问题' : '好处') + '容易自己消解。' : AN.huaPlain(f.hua, f.palace)) + ' <small class="hint">' + f.star + ' → ' + f.palace + '</small></li>';
     });
-    h += '</div>';
+    h += '</ul>';
     h += '<p class="note">小限（虚岁）：' + P.xiaoxian.slice(0, 8).join('、') + ' …  · 宫神：' + P.changsheng + '、' + P.boshi + '、' + P.suiqian + '、' + P.jiangqian + ' ' + xpt('zw|十二神', '这些小字是什么') + '</p>';
     return h;
   }
+  var ZW_VIEWS = [['overview', '总览'], ['chart', '命盘'], ['links', '宫位联动'], ['run', '运限'], ['palaces', '十二宫']];
+  function zwAn(r) { if (!zwState.an || zwState.an.r !== r) zwState.an = AN.ziwei(r); return zwState.an; }
   function renderZiwei(r) {
-    var ov = zwOverlays(r);
-    var h = '<div class="card" id="zwBoardCard"><h2>紫微命盘<span class="sub">点击任一宫看详解</span></h2>' + jumpStrip('ziwei') + zwBoard(r, ov) + '</div>';
-    h += '<div class="zw-layout"><div class="card" id="zwDetail">' + zwDetail(r) + '</div>';
-    h += '<div class="card"><h2>格局<span class="sub">本盘满足条件的结构</span></h2>';
-    if (r.patterns.length) {
-      var o = { '吉': 0, '平': 1, '凶': 2 };
-      r.patterns.slice().sort(function (a, b) { return o[a.level] - o[b.level]; }).forEach(function (p) {
-        h += '<div class="pat"><span class="n">' + xpt('zwg|' + p.key, p.name) + '</span><span class="lv ' + p.level + '">' + p.level + '</span><p>' + esc(p.why) + '</p></div>';
+    var zn = zwAn(r), view = zwState.view || 'overview', seat = r.palaces[r.ming].major.map(function (s) { return s.name; }).join('、') || '无主星';
+    var h = '<div class="card rhead"><div class="rh-main"><div class="rh-seat">' + seat + '</div><div class="rh-txt"><b>' + (r.name ? esc(r.name) + ' · ' : '') + r.genderText + '</b><div class="chips">' +
+      '<button type="button" class="chip" data-xp="zw|命宫身宫">命 ' + r.mingGz + ' · 身在' + r.palaces[r.shen].name + '</button>' +
+      '<button type="button" class="chip gold" data-xp="zw|五行局">' + r.juName + '</button>' +
+      '<button type="button" class="chip" data-xp="an|星系">' + zn.sys + '</button>' +
+      r.sihua.map(function (x) { return '<button type="button" class="chip" data-xp="zwh|' + x.hua + '">' + x.star + '<i class="hua h-' + x.hua + '">' + x.hua + '</i></button>'; }).join('') +
+      '</div></div></div></div>';
+    h += AV.subtabs(ZW_VIEWS, view, 'data-zwv') + '<div class="view">';
+    if (view === 'overview') h += AV.zwOverview(zn, jumpStrip('ziwei'));
+    else if (view === 'chart') {
+      h += '<div class="card" id="zwBoardCard"><h2>紫微命盘<span class="sub">点击任一宫看详解</span></h2>' + zwBoard(r, {}) + '</div>';
+      h += '<div class="card" id="zwDetail">' + zwDetail(r) + '</div>';
+    } else if (view === 'links') h += AV.zwLinks(zn);
+    else if (view === 'run') {
+      var ov = zwOverlays(r), ps = zwRunsOf(r);
+      h += '<div class="card" id="zwTimeline">' + zwTimeline(r) + '</div>';
+      if (ps.length) h += '<div class="card"><h2>这段时间会怎样<span class="sub">由大到小，一层套一层</span></h2>' + ps.map(function (X, i) { return AV.zwRunPanel(X, i === ps.length - 1); }).join('') +
+        (zwState.ly != null ? '<p class="note">《全书》说要把大限、小限、太岁合起来看。这里把它们逐层叠加。' + xpw('zw|流年', '流年怎么看') + '</p>' : '') + '</div>';
+      h += '<div class="card" id="zwBoardCard"><h2>叠加到命盘上<span class="sub">每宫下方的小标签是运限宫名</span></h2>' + zwBoard(r, ov) + '</div>';
+    } else {
+      h += '<div class="card"><h2>十二宫逐宫解读<span class="sub">点开看每一宫</span></h2><div class="zw-all">';
+      var order = []; for (var i = 0; i < 12; i++) order.push(Ziwei.md(r.ming - i));
+      order.forEach(function (b) {
+        var P = r.palaces[b], sig = AN.zSig(AN.pScoreSF(r, b));
+        h += '<details class="zw-acc"' + (b === r.ming ? ' open' : '') + '><summary><b>' + P.name + '</b> <small>' + P.gan + P.zhi + '</small> ' + AV.sigTag(sig) + ' <span>' + (P.major.map(function (s) { return s.name + (s.hua ? '化' + s.hua : ''); }).join('、') || '空宫') + '</span></summary>' +
+          '<p class="desc">' + ZX.PALACE[P.name][0] + '</p>' + ZX.palaceReading(r, b) + '</details>';
       });
-    } else h += '<p class="hint">本盘没有命中已收录的格局。这不是坏事：大多数人的盘都不成“格”。</p>';
-    h += '<p class="note">吉凶标签来自古书的笼统分类，点开名称可以看成格条件和古书原话。</p></div></div>';
-    h += '<div class="card" id="zwTimeline">' + zwTimeline(r) + '</div>';
-    h += '<div class="card"><h2>十二宫总览<span class="sub">展开查看每一宫的白话解读</span></h2><div class="zw-all">';
-    var order = []; for (var i = 0; i < 12; i++) order.push(Ziwei.md(r.ming - i));
-    order.forEach(function (b) {
-      var P = r.palaces[b];
-      h += '<details class="zw-acc"' + (b === r.ming ? ' open' : '') + '><summary><b>' + P.name + '</b> <small>' + P.gan + P.zhi + '</small> <span>' + (P.major.map(function (s) { return s.name + (s.hua ? '化' + s.hua : ''); }).join('、') || '空宫') + '</span></summary>' +
-        '<p class="desc">' + ZX.PALACE[P.name][0] + '</p>' + ZX.palaceReading(r, b) + '</details>';
-    });
-    h += '</div><p class="note">解读是把每颗星的传统含义按宫位直译，没有综合全盘。实际论断要看星曜组合、亮度、四化和三方四正的相互作用。命理内容为传统文化参考。</p></div>';
-    $('#ziweiResult').innerHTML = h;
+      h += '</div><p class="note">解读是把每颗星的传统含义按宫位直译。各宫之间怎么互相影响，请看“宫位联动”和“总览”。</p></div>';
+    }
+    $('#ziweiResult').innerHTML = h + '</div>';
   }
-  function refreshZw(partial) {
+  function refreshZw() {
     var r = zwState.res; if (!r) return;
     var sy = window.scrollY;
     renderZiwei(r);
     window.scrollTo(0, sy);
   }
+  function zwGoToday(r) {
+    var td = Ziwei.today(r, Solar.fromDate(new Date()));
+    var d = Ziwei.daxianOfAge(r, Ziwei.nominalAge(r, td.y));
+    zwState.dx = d ? d.i : 0;
+    zwState.ly = td.y; zwState.lm = td.k - 1; zwState.lmLeap = td.leap; zwState.ld = td.d - 1;
+  }
   function runZiwei(inp) {
     try {
       var r = Ziwei.compute(inp || ziweiInput());
       zwState.res = r; zwState.sel = r.ming;
-      var nowY = new Date().getFullYear(), age = Ziwei.nominalAge(r, nowY);
-      var d = Ziwei.daxianOfAge(r, age);
-      zwState.dx = d ? d.i : 0;
-      zwState.ly = d ? nowY : r.L.lunarYear + r.daxian[0].from - 1;
-      zwState.lm = null;
+      zwGoToday(r);
       renderZiwei(r);
       return r;
     } catch (e) {
@@ -1164,7 +1285,7 @@
   $('#ziweiForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var inp = ziweiInput();
-    if (runZiwei(inp)) { rememberProfile(inp); var el = $('#ziweiResult'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    if (runZiwei(inp)) { rememberProfile(inp); collapseForm('zw', inp); var el = $('#ziweiResult'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });
   $('#zw-now').addEventListener('click', function () { zwDtp.setNow(); });
   $('#zw-save').addEventListener('click', function () {
@@ -1175,29 +1296,167 @@
   $('#ziweiResult').addEventListener('click', function (e) {
     var r = zwState.res; if (!r) return;
     if (e.target.closest('[data-xp]')) return;
+    var v = e.target.closest('[data-zwv]');
+    if (v) { zwState.view = v.getAttribute('data-zwv'); refreshZw(); return; }
+    if (e.target.closest('[data-zw-today]')) { zwGoToday(r); refreshZw(); return; }
     var c = e.target.closest('[data-zb]');
     if (c) {
       zwState.sel = +c.dataset.zb;
       refreshZw();
-      if (window.innerWidth < 900 && c.classList.contains('zw-cell')) { var d = $('#zwDetail'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      if (zwState.view === 'chart' && window.innerWidth < 900 && c.classList.contains('zw-cell')) { var d = $('#zwDetail'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       return;
     }
-    var b = e.target.closest('.yun-cell'); if (!b) return;
+    var b = e.target.closest('.yun-cell, .day'); if (!b) return;
     if (b.dataset.zd != null) {
       var i = +b.dataset.zd;
-      if (zwState.dx === i) { zwState.dx = null; zwState.ly = null; zwState.lm = null; }
-      else { zwState.dx = i; var d0 = r.daxian[i]; zwState.ly = null; zwState.lm = null; }
+      if (zwState.dx === i) { zwState.dx = null; zwState.ly = null; zwState.lm = null; zwState.ld = null; }
+      else { zwState.dx = i; zwState.ly = null; zwState.lm = null; zwState.ld = null; }
     } else if (b.dataset.zy != null) {
       var y = +b.dataset.zy;
-      if (zwState.ly === y) { zwState.ly = null; zwState.lm = null; } else { zwState.ly = y; zwState.lm = null; }
+      zwState.ly = zwState.ly === y ? null : y; zwState.lm = null; zwState.ld = null;
     } else if (b.dataset.zm != null) {
-      var m = +b.dataset.zm;
-      zwState.lm = zwState.lm === m ? null : m;
+      var m = +b.dataset.zm, lp = b.dataset.leap === '1';
+      if (zwState.lm === m && !!zwState.lmLeap === lp) { zwState.lm = null; zwState.lmLeap = false; } else { zwState.lm = m; zwState.lmLeap = lp; }
+      zwState.ld = null;
+    } else if (b.dataset.zr != null) {
+      var k = +b.dataset.zr;
+      zwState.ld = zwState.ld === k ? null : k;
     }
     refreshZw();
   });
   $('#ziweiResult').addEventListener('keydown', function (e) {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('zw-cell')) { e.preventDefault(); e.target.click(); }
+  });
+
+  /* ================= 综合分析 ================= */
+  var jtState = { j: null, view: 'overview', year: null, inp: null };
+  var JT_VIEWS = [['overview', '两边怎么说'], ['time', '人生阶段与逐年'], ['now', '当下'], ['report', '文字报告']];
+  function jointInput() {
+    var cp = currentProfile();
+    if (cp) return { inp: cp.input, name: cp.name, saved: true };
+    if (bzState.res) return { inp: bzState.res.input, name: bzState.res.name, saved: false };
+    return { inp: baziInput(), name: '', saved: false };
+  }
+  function runJoint() {
+    try {
+      var src = jointInput(), inp = src.inp;
+      var nowY = new Date().getFullYear();
+      jtState.j = AN.joint(Bazi.compute(inp), Ziwei.compute(inp), nowY);
+      jtState.inp = inp; jtState.saved = src.saved;
+      jtState.year = nowY;
+      renderJoint();
+    } catch (e) {
+      console.error(e);
+      $('#jointResult').innerHTML = '<div class="card"><p class="hint warn">分析失败：' + esc(e.message) + '</p></div>';
+    }
+  }
+  function jointNowHtml(j) {
+    var nowD = new Date(), s = Solar.fromDate(nowD), lu = s.getLunar(), bn = j.bn, zn = j.zn, r = zn.r;
+    var ch = bn.A.res.yun.daYun.filter(function (d) { return d.liuNian.some(function (x) { return x.year === nowD.getFullYear(); }); })[0];
+    var par = ch && ch.gz ? [{ label: '大运', gz: ch.gz }] : [];
+    var yGz = lu.getYearInGanZhiExact(), mGz = lu.getMonthInGanZhiExact(), dGz = lu.getDayInGanZhi();
+    var a1 = AN.period(bn.A, yGz, '流年', par), a2 = AN.period(bn.A, mGz, '流月', par.concat([{ label: '流年', gz: yGz }])), a3 = AN.period(bn.A, dGz, '流日', par.concat([{ label: '流年', gz: yGz }, { label: '流月', gz: mGz }]));
+    var td = Ziwei.today(r, s), dx = Ziwei.daxianOfAge(r, Ziwei.nominalAge(r, td.y)), zp = dx ? [{ level: '大限', anchor: dx.b, stem: dx.gan }] : [];
+    var gz = Ziwei.yearGz(td.y), z1 = AN.zwRun(r, '流年', GZ.zi(gz.charAt(1)), gz.charAt(0), zp); z1.gz = gz;
+    zp = zp.concat([{ level: '流年', anchor: z1.anchor, stem: gz.charAt(0) }]);
+    var mm = Ziwei.liuYue(r, td.y)[td.k - 1], z2 = AN.zwRun(r, '流月', mm.b, mm.stem, zp); z2.gz = mm.gz;
+    zp = zp.concat([{ level: '流月', anchor: mm.b, stem: mm.stem }]);
+    var dd = Ziwei.liuRi(r, td.y, td.k, td.leap)[td.d - 1], z3 = dd ? AN.zwRun(r, '流日', dd.b, dd.stem, zp) : null; if (z3) z3.gz = dd.gz;
+    var h = '<div class="card"><h2>今天<span class="sub">' + s.toYmd() + ' · ' + lu.getMonthInChinese() + '月' + lu.getDayInChinese() + '</span></h2><div class="jy2"><div><h5>八字这边</h5>' + AV.periodPanel(a3, true) + AV.periodPanel(a2, false) + AV.periodPanel(a1, false) + '</div><div><h5>紫微这边</h5>' + (z3 ? AV.zwRunPanel(z3, true) : '') + AV.zwRunPanel(z2, false) + AV.zwRunPanel(z1, false) + '</div></div><p class="note">日、月层面的判断很轻，只作提醒。越小的时段越不要放大解读。</p></div>';
+    var q = null;
+    try { q = Qimen.compute({ y: s.getYear(), m: s.getMonth(), d: s.getDay(), h: s.getHour(), mi: s.getMinute(), birthGz: bn.A.res.pillars[0].gz }); } catch (e) { console.error(e); }
+    h += AV.qimenCard(q, Qimen, bn);
+    return h;
+  }
+  function renderJoint() {
+    var j = jtState.j; if (!j) return;
+    var res = j.bn.A.res, nowY = j.bn.nowY;
+    var h = '<div class="card rhead"><div class="rh-main"><div class="rh-txt"><b>' + (res.name ? esc(res.name) : '未命名') + ' · ' + (res.gender === 1 ? '男' : '女') + ' · ' + res.inputSolar.slice(0, 16) + '</b>' +
+      '<div class="hint">' + (jtState.saved ? '分析的是顶部“当前命例”。想换人，请在顶部切换。' : '这是八字栏目当前的出生信息。要分析其他人，请先排盘或在顶部选择命例。') + '</div></div></div></div>';
+    h += AV.subtabs(JT_VIEWS, jtState.view, 'data-jtv') + '<div class="view">';
+    if (jtState.view === 'overview') h += AV.jointOverview(j);
+    else if (jtState.view === 'time') h += AV.jointTime(j, jtState.year, nowY);
+    else if (jtState.view === 'now') h += jointNowHtml(j);
+    else h += AV.reportHtml(AN.report(j, nowY));
+    $('#jointResult').innerHTML = h + '</div>';
+  }
+  $('#jointResult').addEventListener('click', function (e) {
+    if (e.target.closest('[data-xp]')) return;
+    var v = e.target.closest('[data-jtv]');
+    if (v) { jtState.view = v.getAttribute('data-jtv'); var sy0 = window.scrollY; renderJoint(); window.scrollTo(0, sy0); return; }
+    var y = e.target.closest('[data-jy]');
+    if (y) { jtState.year = +y.dataset.jy; var sy = window.scrollY; renderJoint(); window.scrollTo(0, sy); return; }
+    if (e.target.id === 'reportCopy') {
+      var txt = AV.reportText(AN.report(jtState.j, jtState.j.bn.nowY));
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast('报告已复制'); }, function () { prompt('复制以下内容：', txt); });
+      else prompt('复制以下内容：', txt);
+    }
+  });
+
+  /* ================= 折叠表单 ================= */
+  function formSummary(inp) {
+    var s = (inp.name ? inp.name + ' · ' : '') + (+inp.gender === 1 ? '男' : '女') + ' · ';
+    s += inp.calendar === 'lunar' ? '农历 ' + inp.y + '年' + (inp.leap ? '闰' : '') + LUNAR_MON[inp.m] + '月' + LUNAR_DAY[inp.d] : '公历 ' + inp.y + '-' + pad(inp.m) + '-' + pad(inp.d);
+    s += ' ' + pad(inp.h) + ':' + pad(inp.mi) + (inp.city ? ' · ' + inp.city : '');
+    return s;
+  }
+  function collapseForm(which, inp) {
+    var f = $(which === 'bz' ? '#baziForm' : '#ziweiForm');
+    var bar = f.querySelector('.form-summary');
+    if (!bar) {
+      bar = document.createElement('div'); bar.className = 'form-summary';
+      bar.innerHTML = '<span class="fs-txt"></span><button type="button" class="btn sm fs-open">换一个时间</button>';
+      f.insertBefore(bar, f.firstChild);
+      bar.querySelector('.fs-open').addEventListener('click', function () { f.classList.remove('collapsed'); });
+    }
+    bar.querySelector('.fs-txt').textContent = formSummary(inp);
+    f.classList.add('collapsed');
+  }
+
+  /* ================= 修改命例 ================= */
+  var recDtp = new DTP($('[data-dtp="rec"]'), { id: 'rec', lunar: true });
+  var recLoc = new Loc($('[data-loc="rec"]'), { id: 'rec' });
+  recDtp.onChange = function () { try { recLoc.checkDst(recDtp.solar()); } catch (e) { } };
+  var recEditId = null;
+  function openRecEditor(r) {
+    recEditId = r.id;
+    var inp = r.input;
+    $('#re-name').value = r.name || '';
+    $$('input[name=re-gender]').forEach(function (x) { x.checked = +x.value === (+r.gender === 0 ? 0 : 1); });
+    recLoc.dstAuto = false;
+    recDtp.set({ calendar: inp.calendar, y: +inp.y, m: +inp.m, d: +inp.d, leap: inp.leap === true || inp.leap === 'true' || inp.leap === 1 || inp.leap === '1', h: +inp.h, mi: +inp.mi });
+    recLoc.set({ city: inp.city, longitude: inp.longitude === '' || inp.longitude == null ? null : +inp.longitude, tz: inp.tz == null || inp.tz === '' ? 8 : +inp.tz, trueSolar: !!inp.trueSolar && inp.trueSolar !== 'false' && inp.trueSolar !== '0', dst: !!inp.dst && inp.dst !== 'false' && inp.dst !== '0' });
+    $('#re-note').value = r.note || '';
+    $('#recEditor').hidden = false;
+    $('#re-title').textContent = '修改命例：' + (r.name || '未命名');
+    $('#recEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('#re-cancel').addEventListener('click', function () { $('#recEditor').hidden = true; recEditId = null; });
+  $('#recEditor').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var list = records(), r = list.filter(function (x) { return x.id === recEditId; })[0];
+    if (!r) { $('#recEditor').hidden = true; return; }
+    var v = recDtp.get(), l = recLoc.get(), name = $('#re-name').value.trim(), gender = +($('input[name=re-gender]:checked').value);
+    var inp = Object.assign({}, r.input, { calendar: v.calendar, y: v.y, m: v.m, d: v.d, leap: v.leap, h: v.h, mi: v.mi, name: name, gender: gender, city: l.city, longitude: l.longitude, tz: l.tz, trueSolar: l.trueSolar && l.longitude != null, dst: l.dst });
+    var res;
+    try { res = Bazi.compute(inp); } catch (err) { toast('这个时间排不出来：' + err.message); return; }
+    var key = profileKey(inp), dup = list.filter(function (x) { if (x.id === r.id) return false; try { return profileKey(x.input) === key; } catch (er) { return false; } })[0];
+    if (dup && !confirm('已有一条完全相同的命例“' + (dup.name || '未命名') + '”。要合并吗？（另一条会被删除）')) return;
+    if (dup) list = list.filter(function (x) { return x !== dup; });
+    r.input = inp; r.name = name; r.gender = gender; r.note = $('#re-note').value.trim();
+    r.bazi = res.pillars.map(function (p) { return p.gz; }).join(' '); r.solar = res.inputSolar.slice(0, 16);
+    r.auto = false; r.updated = new Date().toISOString();
+    saveRecords(list);
+    $('#recEditor').hidden = true; recEditId = null;
+    var cur = store('xs.current');
+    if (cur === r.id || (dup && cur === dup.id)) applyProfile(r);
+    refreshProfiles(); renderRecords();
+    toast('已修改');
+  });
+  $('#curEdit').addEventListener('click', function () {
+    var r = currentProfile();
+    if (!r) { toast('请先选择一个命例'); return; }
+    showTab('records'); openRecEditor(r);
   });
 
   /* ================= 原理抽屉 ================= */
@@ -1208,6 +1467,7 @@
     if (tab === 'bazi' && bzState.res) ctx.bazi = bzState.res;
     if (tab === 'qimen' && qmState.res) ctx.qimen = qmState.res;
     if (tab === 'ziwei' && zwState.res) ctx.ziwei = zwState.res;
+    if (tab === 'joint' && jtState.j) { ctx.bazi = jtState.j.bn.A.res; ctx.ziwei = jtState.j.zn.r; }
     return ctx;
   }
   function xpRender() {
@@ -1298,8 +1558,10 @@
       if (!o.noQimen) { $('#qm-ming').value = b.pillars[0].gz; }
       $('#zr-sx').value = b.shengxiao;
     } catch (e) { }
-    if (o.run !== false) { runBazi(r.input); runZiwei(r.input); if (qmState.res) runQimen(); }
+    if (o.run !== false) { runBazi(r.input); runZiwei(r.input); if (qmState.res) runQimen(); collapseForm('bz', r.input); collapseForm('zw', r.input); }
     refreshProfiles();
+    var curTab = $('.tab[aria-selected="true"]');
+    if (o.run !== false && curTab && curTab.dataset.tab === 'joint') runJoint();
   }
   function currentProfile() { var id = store('xs.current'); return records().filter(function (r) { return r.id === id; })[0] || null; }
   function hhFill(side, r) {
@@ -1315,13 +1577,15 @@
     var s = '<div class="jump"><span class="hint">用这个人的生日继续看：</span>';
     if (from !== 'bazi') s += btn('bazi', '八字排盘');
     if (from !== 'ziwei') s += btn('ziwei', '紫微斗数');
+    s += btn('joint', '和另一套方法合看');
     s += btn('hehun-a', '合婚（放甲方）') + btn('hehun-b', '合婚（放乙方）') + btn('qimen', '奇门年命') + btn('almanac', '择日避冲');
     return s + '</div>';
   }
   function jumpTo(go, inp) {
     var rec = rememberProfile(inp, { manual: false }) || { id: '', input: inp, name: inp.name, gender: inp.gender };
-    if (go === 'bazi') { setBaziInput(rec.input); showTab('bazi'); runBazi(rec.input); }
-    else if (go === 'ziwei') { setZiweiInput(rec.input); showTab('ziwei'); runZiwei(rec.input); }
+    if (go === 'bazi') { setBaziInput(rec.input); showTab('bazi'); runBazi(rec.input); collapseForm('bz', rec.input); }
+    else if (go === 'ziwei') { setZiweiInput(rec.input); showTab('ziwei'); runZiwei(rec.input); collapseForm('zw', rec.input); }
+    else if (go === 'joint') { showTab('joint'); }
     else if (go === 'hehun-a' || go === 'hehun-b') {
       var sd = go.slice(-1);
       hhFill(sd, rec); showTab('hehun');
@@ -1434,16 +1698,18 @@
       runQimen(); return true;
     }
     if (name === 'ziwei' && prm.y) { setZiweiInput(prm); showTab('ziwei'); runZiwei(); return true; }
-    if (['almanac', 'hehun', 'reverse', 'records', 'bazi', 'ziwei'].indexOf(name) >= 0) { showTab(name); return true; }
+    if (['almanac', 'hehun', 'reverse', 'records', 'bazi', 'ziwei', 'joint'].indexOf(name) >= 0) { showTab(name); return true; }
     return false;
   }
   window.addEventListener('hashchange', route);
   XP.setYongShen(Qimen.YONGSHEN);
+  function syncTopbarH() { var t = $('.topbar'); if (t) document.documentElement.style.setProperty('--topbar-h', t.offsetHeight + 'px'); }
+  syncTopbarH(); window.addEventListener('resize', syncTopbarH);
   qmDtp.setNow();
   refreshProfiles();
   if (!route()) {
     var cp0 = currentProfile();
-    if (cp0) { setBaziInput(cp0.input); setZiweiInput(cp0.input); try { $('#qm-ming').value = Bazi.compute(cp0.input).pillars[0].gz; } catch (e) { } runBazi(cp0.input); }
+    if (cp0) { setBaziInput(cp0.input); setZiweiInput(cp0.input); try { $('#qm-ming').value = Bazi.compute(cp0.input).pillars[0].gz; } catch (e) { } runBazi(cp0.input); collapseForm('bz', cp0.input); collapseForm('zw', cp0.input); }
     else runBazi();
   }
   if (!qmState.res) runQimen();

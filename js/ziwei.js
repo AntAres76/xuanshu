@@ -265,6 +265,28 @@
     return out;
   }
 
+  /**
+   * 流日：流月命宫起初一，顺数到当日。k 为农历月（1–12），leap 表示闰月。
+   * 闰月前半月用本月的宫，后半月用下月的宫（与“闰月处理”的通行取法一致）。
+   */
+  function liuRi(res, y, k, leap) {
+    var ms = liuYue(res, y), m = ms[k - 1], out = [];
+    for (var d = 1; d <= 30; d++) {
+      var lu;
+      try { lu = Lunar.fromYmd(y, leap ? -k : k, d); } catch (e) { break; }
+      if (Math.abs(lu.getMonth()) !== k || lu.getDay() !== d) break;
+      var anchorM = leap && d > 15 ? ms[k % 12] : m;
+      var gz = lu.getDayInGanZhi(), s = lu.getSolar();
+      out.push({ d: d, leap: !!leap, k: k, b: md(anchorM.b + d - 1), gz: gz, stem: gz.charAt(0), ymd: s.toYmd(), week: s.getWeekInChinese() });
+    }
+    return out;
+  }
+  /** 今天对应的流年、流月、流日位置 */
+  function today(res, solar) {
+    var lu = solar.getLunar(), m = lu.getMonth();
+    return { y: lu.getYear(), k: Math.abs(m), leap: m < 0, d: lu.getDay() };
+  }
+
   /** 三方四正：本宫、对宫、两个三合宫 */
   function sanFang(b) { return [md(b), md(b + 4), md(b - 4), md(b + 6)]; }
 
@@ -369,7 +391,7 @@
 
   return {
     compute: compute, resolveLunar: resolveLunar, ziweiPos: ziweiPos,
-    yearGz: yearGz, nominalAge: nominalAge, daxianOfAge: daxianOfAge, xiaoxianBranch: xiaoxianBranch, overlay: overlay, douJun: douJun, liuYue: liuYue,
+    yearGz: yearGz, nominalAge: nominalAge, daxianOfAge: daxianOfAge, xiaoxianBranch: xiaoxianBranch, overlay: overlay, douJun: douJun, liuYue: liuYue, liuRi: liuRi, today: today,
     sanFang: sanFang, feiHua: feiHua, md: md, bright: bright,
     PALACE_NAMES: PALACE_NAMES, MAJORS: MAJORS, AUX: AUX, SHA: SHA, SIHUA: SIHUA, HUA: HUA, ZW_SERIES: ZW_SERIES, TF_SERIES: TF_SERIES, BRIGHT: BRIGHT, BRIGHT_RANK: BRIGHT_RANK,
     MINGZHU: MINGZHU, SHENZHU: SHENZHU, LUCUN: LUCUN, KUI_YUE: KUI_YUE, TIANMA: TIANMA, HUO_BASE: HUO_BASE, LING_BASE: LING_BASE, JU_NAME: JU_NAME, CS_START: CS_START, XIAOXIAN_START: XIAOXIAN_START, group: group

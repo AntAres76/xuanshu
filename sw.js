@@ -1,5 +1,5 @@
 /* 由 tools/build_sw.js 生成，不要手改。离线缓存：所有文件在首次打开时存到本机，之后不需要网络。 */
-var VERSION = 'xuanshu-cb37806e12';
+var VERSION = 'xuanshu-5f2390c5bb';
 var FILES = [
   "css/app.css",
   "icons/apple-touch-icon.png",
@@ -7,6 +7,7 @@ var FILES = [
   "icons/icon-512.png",
   "icons/icon-maskable-512.png",
   "index.html",
+  "js/analysis.js",
   "js/app.js",
   "js/bazi.js",
   "js/explain-ziwei.js",
@@ -15,6 +16,7 @@ var FILES = [
   "js/lib/lunar.js",
   "js/qimen.js",
   "js/timeutil.js",
+  "js/views.js",
   "js/ziwei.js",
   "manifest.webmanifest"
 ];

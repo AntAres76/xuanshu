@@ -280,6 +280,59 @@ t('紫微格局都有释义（5000 张盘）', function () {
   assert(Object.keys(seen).length > 40, '命中格局 ' + Object.keys(seen).length);
 });
 
+console.log('整体分析');
+var AN = require('../js/analysis.js'), AV = require('../js/views.js');
+function rndGen(seed0) { var seed = seed0; return function (k) { seed = (seed * 9301 + 49297) % 233280; return Math.floor(seed / 233280 * k); }; }
+t('流日：与 iztro 用例一致（2023-08-19 己酉，流日命宫在申）', function () {
+  var ds = Ziwei.liuRi(z1, 2023, 7, false);
+  var d = ds.filter(function (x) { return x.ymd === '2023-08-19'; })[0];
+  assert.strictEqual(d.gz, '己酉'); assert.strictEqual(GZ.ZHI[d.b], '申');
+  assert.deepStrictEqual(Ziwei.SIHUA[d.stem], ['武曲', '贪狼', '天梁', '文曲']);
+  assert(ds.length === 29 || ds.length === 30);
+});
+t('闰月的流日能取到（2023 闰二月）', function () {
+  var ds = Ziwei.liuRi(z1, 2023, 2, true);
+  assert(ds.length >= 29 && ds[0].ymd === '2023-03-22', ds.length + ' ' + (ds[0] && ds[0].ymd));
+});
+t('300 张随机盘：引擎和所有页面都能生成，释义全部有内容', function () {
+  var rnd = rndGen(5), keys = {};
+  function collect(html) { (html.match(/data-xp="[^"]+"/g) || []).forEach(function (m) { keys[m.slice(9, -1).replace(/&amp;/g, '&')] = 1; }); }
+  for (var i = 0; i < 300; i++) {
+    var ip = { y: 1930 + rnd(110), m: 1 + rnd(12), d: 1 + rnd(28), h: rnd(24), mi: 0, gender: rnd(2) };
+    var bz = Bazi.compute(ip), zw = Ziwei.compute(ip), j = AN.joint(bz, zw, 2026);
+    assert.strictEqual(j.rows.length, 7);
+    j.bn.combos.forEach(function (c) { assert(c.plain, '组合缺白话：' + c.key); });
+    j.bn.rel.links.forEach(function (l) { assert(l.state, '关系缺状态：' + l.text); });
+    AN.DOMAINS.forEach(function (d) {
+      [j.bn.domains[d.k], j.zn.domains[d.k]].forEach(function (x) {
+        assert(x.signal >= -2 && x.signal <= 2 && x.verdict && x.because.length, d.k);
+        assert(!/undefined|NaN/.test(x.verdict + x.because.map(function (b) { return b.t; }).join('')), d.k + ' 文字异常');
+      });
+    });
+    var pages = [AV.baziOverview(j.bn, bz, ''), AV.linksView(j.bn), AV.pillarsPlain(j.bn), AV.zwOverview(j.zn, ''), AV.zwLinks(j.zn), AV.jointOverview(j), AV.jointTime(j, 2026, 2026)];
+    pages.forEach(function (h) { assert(!/undefined|NaN/.test(h.replace(/data-xp="[^"]*"/g, '')), '页面文字异常：' + h.match(/.{40}(undefined|NaN).{40}/)); collect(h); });
+    var rep = AN.report(j, 2026); assert(rep.length >= 6);
+    assert(!/undefined|NaN/.test(AV.reportText(rep)), '报告文字异常');
+  }
+  var ctx = { bazi: Bazi.compute({ y: 1990, m: 5, d: 15, h: 14, mi: 30, gender: 1 }), ziwei: z1 };
+  Object.keys(keys).forEach(function (k) { var pg = XP.page(k, ctx); assert(pg.title !== '暂无释义' && pg.html.length > 20, '点开没有内容：' + k); });
+  assert(Object.keys(keys).length > 80, '释义条目 ' + Object.keys(keys).length);
+});
+t('时段分析：大运、流年、流月、流日都有白话和落点', function () {
+  var A = AN.ctxOf(r), P = AN.period(A, '丙午', '流年', [{ label: '大运', gz: '甲申' }]);
+  assert(P.feel.indexOf('外面的事') === 0);
+  P.triggers.forEach(function (x) { assert(x.event && x.event.length > 4, x.text); });
+  assert(AV.periodPanel(P, true).indexOf('可能发生在哪') > 0);
+  var D = AN.period(A, '己酉', '流日', [{ label: '大运', gz: '甲申' }, { label: '流年', gz: '丙午' }, { label: '流月', gz: '己亥' }]);
+  assert(D.label === '流日' && D.signal >= -2 && D.signal <= 2);
+  var X = AN.zwRun(z1, '流日', 3, '己', [{ level: '大限', anchor: 4, stem: '庚' }]);
+  assert(X.huaPlain.length === 4 && X.focus);
+});
+t('十神、十二长生都有白话状态', function () {
+  Object.keys(GZ.SHISHEN_INFO).forEach(function (k) { var s = GZ.SS_STATE[k]; assert(s && s.good && s.bad && s.pos.length === 4, k); });
+  GZ.DISHI.forEach(function (k) { assert(GZ.CS_STATE[k], k); });
+});
+
 console.log('离线');
 t('sw.js 覆盖全部文件且版本最新（改代码后请运行 node tools/build_sw.js）', function () {
   var fs = require('fs'), path = require('path'), B = require('../tools/build_sw.js');
